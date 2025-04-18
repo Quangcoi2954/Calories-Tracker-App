@@ -2,12 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart'; // Import thư viện biểu đồ
-import 'package:intl/intl.dart'; // Để format ngày tháng
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
-import '../providers/calorie_provider.dart'; // Provider chứa dữ liệu cân nặng
-import '../models/weight_entry.dart'; // Model cho dữ liệu cân nặng
-import 'add_weight_screen.dart'; // Màn hình để thêm cân nặng mới
+import '../providers/calorie_provider.dart';
+import '../models/weight_entry.dart';
+import 'add_weight_screen.dart';
 
 class ProgressScreen extends StatefulWidget {
   @override
@@ -15,7 +15,8 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  bool _isLoading = false; // State loading cục bộ cho lần fetch đầu tiên
+  bool _isLoading = true; // Bắt đầu với trạng thái loading
+  String? _errorMsg;
 
   @override
   void initState() {
@@ -26,7 +27,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   Future<void> _fetchData() async {
-    if (mounted) setState(() => _isLoading = true);
+    if (mounted)
+      setState(() {
+        _isLoading = true;
+        _errorMsg = null;
+      });
     try {
       await Provider.of<CalorieProvider>(
         context,
@@ -35,12 +40,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
     } catch (e) {
       print("Error fetching weight data in ProgressScreen: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi tải dữ liệu cân nặng: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _errorMsg =
+              'Lỗi tải dữ liệu: ${e.toString().replaceFirst("Exception: ", "")}';
+        });
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -67,12 +70,24 @@ class _ProgressScreenState extends State<ProgressScreen> {
           if (_isLoading) {
             return Center(child: CircularProgressIndicator());
           }
-
+          if (_errorMsg != null) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  _errorMsg!,
+                  style: TextStyle(color: Colors.red, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
           if (weightData.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  /* ... Thông báo chưa có data ... */
                   Icon(
                     Icons.sentiment_dissatisfied,
                     size: 60,
@@ -117,11 +132,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 SizedBox(height: 25),
                 Expanded(
                   child:
-                      (weightData.length <
-                              2) // Xử lý trường hợp ít hơn 2 điểm dữ liệu
+                      (weightData.length < 2)
                           ? Center(
                             child: Text(
-                              'Cần ít nhất 2 điểm dữ liệu để vẽ biểu đồ đường.',
+                              'Cần ít nhất 2 điểm dữ liệu\nđể vẽ biểu đồ đường.',
+                              textAlign: TextAlign.center,
                             ),
                           )
                           : LineChart(_buildChartData(weightData, context)),
@@ -144,55 +159,50 @@ class _ProgressScreenState extends State<ProgressScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => AddWeightScreen()),
-    ).then((_) {
-      // Tùy chọn: Tải lại dữ liệu sau khi màn hình AddWeight đóng lại
-      // Bỏ comment nếu muốn tự động refresh
-      // _fetchData();
-    });
+    ).then((_) => _fetchData()); // Tải lại dữ liệu sau khi thêm
   }
 
-  // --- Hàm xây dựng dữ liệu cho LineChart ĐÃ SỬA LỖI ---
   LineChartData _buildChartData(List<WeightEntry> data, BuildContext context) {
-    // Cần ít nhất 2 điểm để vẽ đường, nếu không trả về data rỗng hoặc cấu hình đặc biệt
-    if (data.length < 2) {
-      // Hoặc bạn có thể cấu hình để vẽ 1 điểm nếu muốn
-      return LineChartData(); // Trả về data rỗng để tránh lỗi
-    }
+    if (data.isEmpty) return LineChartData(); // Trả về rỗng nếu data rỗng
 
     List<FlSpot> spots =
-        data.asMap().entries.map((entry) {
-          return FlSpot(
-            entry.value.timestamp.millisecondsSinceEpoch.toDouble(),
-            entry.value.weight,
-          );
-        }).toList();
+        data
+            .map(
+              (entry) => FlSpot(
+                entry.timestamp.millisecondsSinceEpoch.toDouble(),
+                entry.weight,
+              ),
+            )
+            .toList();
 
-    double minY =
-        spots.map((spot) => spot.y).reduce((a, b) => a < b ? a : b) - 2;
-    double maxY =
-        spots.map((spot) => spot.y).reduce((a, b) => a > b ? a : b) + 2;
-    if (minY < 0) minY = 0;
+    // Xử lý data chỉ có 1 điểm để vẽ biểu đồ
+    bool isSinglePoint = data.length < 2;
+    double minY, maxY, minX, maxX;
 
-    double minX = spots.first.x;
-    double maxX = spots.last.x;
-    // Đảm bảo minX và maxX không trùng nhau tuyệt đối (gây lỗi chia cho 0 ở interval)
-    if (minX == maxX) {
-      minX = minX - Duration(days: 1).inMilliseconds;
-      maxX = maxX + Duration(days: 1).inMilliseconds;
+    if (isSinglePoint) {
+      minY = spots.first.y - 5;
+      maxY = spots.first.y + 5;
+      minX = spots.first.x - Duration(days: 1).inMilliseconds.toDouble();
+      maxX = spots.first.x + Duration(days: 1).inMilliseconds.toDouble();
+    } else {
+      minY = spots.map((spot) => spot.y).reduce((a, b) => a < b ? a : b) - 2;
+      maxY = spots.map((spot) => spot.y).reduce((a, b) => a > b ? a : b) + 2;
+      minX = spots.first.x;
+      maxX = spots.last.x;
+      if (minX == maxX) {
+        minX -= Duration(days: 1).inMilliseconds;
+        maxX += Duration(days: 1).inMilliseconds;
+      }
     }
-    // Tính toán interval hợp lý, tránh chia cho 0
-    double bottomInterval =
-        (maxX - minX) > 0 ? (maxX - minX) / 4 : 1; // Chia 4 khoảng nếu > 0
+    if (minY < 0) minY = 0;
     double horizontalInterval =
-        (maxY - minY) > 0 ? (maxY - minY) / 5 : 1; // Chia 5 khoảng nếu > 0
+        (maxY - minY).abs() > 1
+            ? (maxY - minY) / 5
+            : 1; // Tránh chia cho 0 hoặc số quá nhỏ
 
     return LineChartData(
       lineTouchData: LineTouchData(
         touchTooltipData: LineTouchTooltipData(
-          // Lỗi 'tooltipBgColor' isn't defined?
-          // Tham số này hợp lệ trong các phiên bản fl_chart gần đây.
-          // Nếu bạn vẫn gặp lỗi, hãy kiểm tra lại tên hoặc thử xóa tạm dòng này
-          // và tham khảo docs của phiên bản fl_chart bạn đang dùng.
           //tooltipBgColor: Colors.blueGrey.withOpacity(0.8),
           getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
             return touchedBarSpots.map((barSpot) {
@@ -222,8 +232,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
       gridData: FlGridData(
         show: true,
         drawVerticalLine: true,
-        horizontalInterval: horizontalInterval, // Dùng interval đã tính
-        verticalInterval: bottomInterval, // Dùng interval đã tính
+        horizontalInterval: horizontalInterval,
         getDrawingHorizontalLine:
             (value) => FlLine(color: Colors.grey[300]!, strokeWidth: 0.5),
         getDrawingVerticalLine:
@@ -234,45 +243,51 @@ class _ProgressScreenState extends State<ProgressScreen> {
         rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
+          axisNameWidget: Text(
+            "Ngày",
+            style: TextStyle(fontSize: 10, color: Colors.grey[700]),
+          ), // Thêm tên trục X
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 30,
-            interval: bottomInterval, // Dùng interval đã tính
+            reservedSize: 32, // Tăng khoảng trống nếu cần
+            // interval: // Bỏ interval để fl_chart tự quyết định
             getTitlesWidget: (value, meta) {
-              // Hàm này nhận value và meta
-              // Chỉ hiển thị nếu không phải min/max để tránh trùng lặp
-              if (value == meta.min || value == meta.max) return Container();
+              // Logic hiển thị nhãn trục X
               DateTime date = DateTime.fromMillisecondsSinceEpoch(
                 value.toInt(),
               );
+              // Chỉ hiển thị nhãn ở các khoảng do fl_chart quyết định, tránh chồng chéo
+              // Nếu muốn kiểm soát nhiều hơn, bạn cần logic phức tạp hơn ở đây
+              // hoặc đặt interval cố định (ví dụ: mỗi 2 ngày)
+              // if (value != meta.min && value != meta.max) { // Vẫn có thể ẩn đầu cuối nếu muốn
               return SideTitleWidget(
-                // *** SỬA LỖI 2 & 3: Thêm meta, xóa axisSide ***
-                meta: meta, // Thêm tham số meta
-                space: 8.0,
-                // axisSide: meta.axisSide, // Bỏ dòng này
+                meta: meta,
+                space: 10.0,
                 child: Text(
-                  DateFormat('dd/MM').format(date),
+                  DateFormat('dd/MM', 'vi_VN').format(date),
                   style: TextStyle(fontSize: 10),
                 ),
               );
+              // }
+              // return Container();
             },
           ),
         ),
         leftTitles: AxisTitles(
+          axisNameWidget: Text(
+            "Cân nặng (kg)",
+            style: TextStyle(fontSize: 10, color: Colors.grey[700]),
+          ), // Thêm tên trục Y
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 45,
-            // interval: 5, // Có thể đặt interval cố định hoặc để thư viện tự tính
             getTitlesWidget: (value, meta) {
-              // Hàm này nhận value và meta
-              if (value == meta.min || value == meta.max) return Container();
+              // if (value == meta.min || value == meta.max) return Container(); // Có thể ẩn đầu cuối
               return SideTitleWidget(
-                // *** SỬA LỖI 2 & 3: Thêm meta, xóa axisSide ***
-                meta: meta, // Thêm tham số meta
-                space: 4.0, // Giảm space nếu cần
-                // axisSide: meta.axisSide, // Bỏ dòng này
+                meta: meta,
+                space: 4.0, // Đảm bảo đủ chỗ
                 child: Text(
-                  '${value.toInt()}kg',
+                  '${value.toInt()}',
                   style: TextStyle(fontSize: 10),
                   textAlign: TextAlign.right,
                 ),
@@ -297,7 +312,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           barWidth: 4,
           isStrokeCapRound: true,
           dotData: FlDotData(
-            show: true,
+            show: !isSinglePoint, // Chỉ hiển thị điểm nếu có nhiều hơn 1 điểm
             getDotPainter:
                 (spot, percent, barData, index) => FlDotCirclePainter(
                   radius: 4,
@@ -311,7 +326,26 @@ class _ProgressScreenState extends State<ProgressScreen> {
             color: Theme.of(context).primaryColor.withOpacity(0.2),
           ),
         ),
+        // Vẽ điểm duy nhất nếu chỉ có 1 điểm dữ liệu
+        if (isSinglePoint)
+          LineChartBarData(
+            spots: spots,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter:
+                  (spot, percent, barData, index) => FlDotCirclePainter(
+                    radius: 5,
+                    color: Theme.of(context).primaryColorDark,
+                    strokeWidth: 1,
+                    strokeColor: Colors.white,
+                  ),
+            ),
+            // Đặt barWidth = 0 để không vẽ đường nối
+            barWidth: 0,
+          ),
       ],
+      // Thêm giới hạn cho các đường kẻ không vượt ra ngoài vùng dữ liệu (tùy chọn)
+      // clipData: FlClipData.all(),
     );
   }
 }

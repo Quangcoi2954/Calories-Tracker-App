@@ -1,8 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Để sử dụng inputFormatters (tùy chọn)
-import 'package:provider/provider.dart';
+// lib/screens/add_weight_screen.dart
 
-import '../providers/calorie_provider.dart'; // Import CalorieProvider để gọi hàm addWeightEntry
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart'; // Thêm import để format ngày
+
+import '../providers/calorie_provider.dart';
 
 class AddWeightScreen extends StatefulWidget {
   @override
@@ -10,40 +13,45 @@ class AddWeightScreen extends StatefulWidget {
 }
 
 class _AddWeightScreenState extends State<AddWeightScreen> {
-  // Controller cho ô nhập cân nặng
   final TextEditingController _weightController = TextEditingController();
-  // Key cho Form để validation
   final _formKey = GlobalKey<FormState>();
-  // State để quản lý trạng thái loading khi lưu
   bool _isLoading = false;
+  // State để lưu ngày được chọn
+  DateTime _selectedDate = DateTime.now(); // Mặc định là ngày hiện tại
 
   @override
   void dispose() {
-    _weightController.dispose(); // Nhớ dispose controller
+    _weightController.dispose();
     super.dispose();
   }
 
-  // Hàm xử lý việc lưu cân nặng mới
+  // Hàm để chọn ngày
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate, // Ngày đang chọn hiện tại
+      firstDate: DateTime(2020), // Ngày xa nhất có thể chọn
+      lastDate:
+          DateTime.now(), // Chỉ cho phép chọn từ ngày hiện tại trở về trước
+      locale: const Locale("vi", "VN"),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked; // Cập nhật ngày đã chọn
+      });
+    }
+  }
+
+  // Hàm lưu cân nặng
   Future<void> _saveWeight() async {
-    // Validate form trước
-    if (!_formKey.currentState!.validate()) {
-      return; // Không làm gì nếu form không hợp lệ
-    }
-
-    // Ẩn bàn phím
+    if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
+    if (mounted) setState(() => _isLoading = true);
 
-    // Bắt đầu trạng thái đang lưu
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
-
-    // Lấy giá trị từ controller và parse thành double
     final String weightString = _weightController.text.trim();
     final double? newWeight = double.tryParse(weightString);
 
     if (newWeight == null) {
-      // Trường hợp không thể parse (dù đã có validator)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -51,20 +59,18 @@ class _AddWeightScreenState extends State<AddWeightScreen> {
             backgroundColor: Colors.red,
           ),
         );
-        setState(() => _isLoading = false); // Dừng lưu
+        setState(() => _isLoading = false);
       }
       return;
     }
 
-    // Gọi hàm addWeightEntry từ CalorieProvider
     try {
-      // `listen: false` vì chỉ gọi hàm
+      // Truyền ngày đã chọn vào hàm addWeightEntry
       await Provider.of<CalorieProvider>(
         context,
         listen: false,
-      ).addWeightEntry(newWeight);
+      ).addWeightEntry(newWeight, _selectedDate); // Truyền _selectedDate
 
-      // Hiển thị thông báo thành công và đóng màn hình (nếu widget còn tồn tại)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -72,56 +78,69 @@ class _AddWeightScreenState extends State<AddWeightScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.of(context).pop(); // Đóng màn hình sau khi lưu
+        Navigator.of(context).pop();
       }
     } catch (e) {
-      // Xử lý lỗi nếu có lỗi từ provider (ví dụ: lỗi lưu vào Firestore)
       if (mounted) {
-        print("Error saving weight entry: $e");
+        print("Error saving weight entry from screen: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lưu cân nặng thất bại: $e'),
+            content: Text(
+              'Lưu cân nặng thất bại: ${e.toString().replaceFirst("Exception: ", "")}',
+            ),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
-      // Dừng trạng thái đang lưu (nếu widget còn tồn tại)
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Thêm Cân nặng Hiện tại')),
+      appBar: AppBar(title: Text('Thêm Cân nặng')),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Form(
-          // Bọc trong Form để sử dụng validation
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch, // Kéo dài nút Lưu
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              SizedBox(height: 20), // Khoảng cách từ AppBar
-              Text(
-                'Nhập cân nặng mới nhất của bạn:',
-                style: TextStyle(fontSize: 18),
-                textAlign: TextAlign.center,
+              SizedBox(height: 20),
+              // Phần chọn ngày
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Ngày ghi nhận:', style: TextStyle(fontSize: 16)),
+                  TextButton.icon(
+                    icon: Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      DateFormat(
+                        'dd/MM/yyyy',
+                        'vi_VN',
+                      ).format(_selectedDate), // Hiển thị ngày đã chọn
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    onPressed: () => _selectDate(context), // Gọi hàm chọn ngày
+                  ),
+                ],
               ),
               SizedBox(height: 20),
-
+              Text(
+                'Nhập cân nặng của bạn vào ngày trên:',
+                style: TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 15),
               // Ô nhập cân nặng
               TextFormField(
                 controller: _weightController,
-                // Cho phép nhập số thập phân
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
-                // Tùy chọn: Chỉ cho phép nhập số và dấu chấm thập phân
-                // inputFormatters: <TextInputFormatter>[
-                //   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,1}')), // Chỉ cho 1 số sau dấu phẩy
-                // ],
                 decoration: InputDecoration(
                   labelText: 'Cân nặng',
                   hintText: 'ví dụ: 65.5',
@@ -132,28 +151,20 @@ class _AddWeightScreenState extends State<AddWeightScreen> {
                   prefixIcon: Icon(Icons.monitor_weight_outlined),
                 ),
                 validator: (value) {
-                  // Validation
-                  if (value == null || value.isEmpty) {
+                  if (value == null || value.isEmpty)
                     return 'Vui lòng nhập cân nặng';
-                  }
                   final number = double.tryParse(value);
-                  if (number == null || number <= 0) {
+                  if (number == null || number <= 0)
                     return 'Cân nặng phải là số dương';
-                  }
-                  if (number < 20 || number > 300) {
-                    // Giới hạn hợp lý
+                  if (number < 20 || number > 300)
                     return 'Cân nặng không hợp lệ (20kg - 300kg)';
-                  }
-                  return null; // Hợp lệ
+                  return null;
                 },
               ),
               SizedBox(height: 30),
-
               // Nút Lưu
               _isLoading
-                  ? Center(
-                    child: CircularProgressIndicator(),
-                  ) // Hiển thị loading khi đang lưu
+                  ? Center(child: CircularProgressIndicator())
                   : ElevatedButton.icon(
                     icon: Icon(Icons.save),
                     label: Text('Lưu Cân nặng'),
