@@ -1,5 +1,6 @@
 // lib/main.dart
 
+import 'package:calories_tracker/screens/onboarding/age_input_screen.dart';
 import 'package:flutter/material.dart';
 
 // 1. Import Firebase Core để khởi tạo Firebase
@@ -19,6 +20,9 @@ import 'providers/auth_provider.dart';
 import 'providers/calorie_provider.dart';
 import 'providers/onboarding_provider.dart';
 
+// bo dong nay sau khi da ching UI xong
+import 'screens/onboarding/weight_input_screen.dart';
+
 // 5. Import màn hình Wrapper
 import 'screens/wrapper.dart';
 
@@ -36,16 +40,13 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print("Firebase initialized successfully!");
 
     // *** KHỞI TẠO ĐỊNH DẠNG NGÀY THÁNG TIẾNG VIỆT ***
     // Gọi hàm này sau khi Firebase init và trước runApp
     await initializeDateFormatting('vi_VN', null);
-    print("Date formatting initialized for vi_VN.");
     // *** KẾT THÚC KHỞI TẠO ĐỊNH DẠNG ***
   } catch (e) {
     // Xử lý lỗi nếu khởi tạo thất bại
-    print("Error during initialization: $e");
   }
 
   // --- Chạy ứng dụng Flutter ---
@@ -54,6 +55,8 @@ void main() async {
 
 // Widget gốc của ứng dụng
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     // --- Thiết lập Provider ---
@@ -68,9 +71,6 @@ class MyApp extends StatelessWidget {
           create: (context) => CalorieProvider(null),
           update: (context, authProvider, previousCalorieProvider) {
             final userId = authProvider.user?.uid;
-            print(
-              "ChangeNotifierProxyProvider: Updating CalorieProvider for user: $userId",
-            );
             return CalorieProvider(userId);
           },
           lazy: false,
@@ -100,7 +100,8 @@ class MyApp extends StatelessWidget {
         ],
 
         // *** KẾT THÚC CẤU HÌNH LOCALE ***
-        home: Wrapper(), // Widget điều hướng chính
+        //home: Wrapper(), // Widget Wrapper để điều hướng
+        home: WeightInputScreen(), // Widget điều hướng chính
         debugShowCheckedModeBanner: false,
       ),
     );
