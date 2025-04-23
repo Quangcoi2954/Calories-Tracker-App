@@ -52,7 +52,7 @@ class _AgeInputScreenState extends State<AgeInputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
+    final primaryColor = Colors.greenAccent[700];
     final highlightColor = Colors.greenAccent[700]!; // Màu xanh lá mạ đậm
     final int itemCount = _maxAge - _minAge + 1; // Tổng số tuổi cần hiển thị
 
@@ -204,15 +204,32 @@ class _AgeInputScreenState extends State<AgeInputScreen> {
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    /* ... */
                     onPressed: _goToNextStep,
-                    child: Text(
-                      'Tiếp Tục',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Tiếp Tục',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Container(
+                          padding: EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,

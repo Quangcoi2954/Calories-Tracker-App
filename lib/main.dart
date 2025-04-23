@@ -21,7 +21,7 @@ import 'providers/calorie_provider.dart';
 import 'providers/onboarding_provider.dart';
 
 // bo dong nay sau khi da ching UI xong
-import 'screens/onboarding/weight_input_screen.dart';
+import 'screens/onboarding/height_input_screen.dart';
 
 // 5. Import màn hình Wrapper
 import 'screens/wrapper.dart';
@@ -100,8 +100,8 @@ class MyApp extends StatelessWidget {
         ],
 
         // *** KẾT THÚC CẤU HÌNH LOCALE ***
-        //home: Wrapper(), // Widget Wrapper để điều hướng
-        home: WeightInputScreen(), // Widget điều hướng chính
+        home: Wrapper(), // Widget Wrapper để điều hướng
+        //home: HeightInputScreen(), // Widget điều hướng chính
         debugShowCheckedModeBanner: false,
       ),
     );
